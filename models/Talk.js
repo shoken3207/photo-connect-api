@@ -2,31 +2,25 @@ const mongoose = require('mongoose');
 
 const TalkSchema = new mongoose.Schema(
   {
-    talkRoomId: {
+    talk_room_id: {
       type: String,
       require: true,
     },
-    senderId: {
+    sender_id: {
       type: String,
       require: true,
     },
-    senderIconImage: {
+    sender_icon_image: {
       type: String,
       require: true,
     },
     message: {
       type: String,
+      default: '',
     },
     image: {
       type: String,
-    },
-    reads: {
-      type: Array,
-      default: [],
-    },
-    likes: {
-      type: Array,
-      default: [],
+      default: '',
     },
   },
   { timestamps: true }

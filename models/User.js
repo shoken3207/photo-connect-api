@@ -2,17 +2,15 @@ const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema(
   {
-    authId: { type: String },
     username: { type: String, require: true },
     email: { type: String, require: true },
     password: { type: String },
-    friends: { type: Array, default: [] },
     desc: { type: String },
-    prefecture: { type: String, require: true },
+    prefecture: { type: String },
     birthday: { type: String },
-    iconImage: { type: String },
-    homeImage: { type: String },
-    isAdmin: { type: String, default: false },
+    icon_image: { type: String },
+    home_image: { type: String },
+    is_admin: { type: Boolean, default: false },
   },
   { timestamp: true }
 );

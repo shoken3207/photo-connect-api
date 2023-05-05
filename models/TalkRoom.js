@@ -2,26 +2,28 @@ const mongoose = require('mongoose');
 
 const TalkRoomSchema = new mongoose.Schema(
   {
-    talkRoomName: {
+    talk_room_name: {
       type: String,
       require: true,
       default: '',
     },
-    talkRoomIconImage: {
+    talk_room_icon_image: {
       type: String,
       require: true,
       default: '',
     },
-    members: {
-      type: Array,
-      default: [],
-    },
-    lastMessage: {
+    last_message: {
       type: String,
       default: 'メッセージのやり取りがありません',
     },
-    lastMessageDate: {
-      type: Date,
+    last_message_date: {
+      type: String,
+    },
+    is_group_talk_room: {
+      type: Boolean,
+    },
+    is_plan_talk_room: {
+      type: Boolean,
     },
   },
   { timestamp: true }
