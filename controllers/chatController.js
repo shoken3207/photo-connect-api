@@ -11,6 +11,8 @@ const {
 } = require('../utils/createResponses');
 const { convertToSaveDate } = require('../utils/dateUtils');
 const Friend = require('../models/Friend');
+const Notification = require('../models/Notification');
+const { NOTIFICATION_TYPE } = require('../const');
 
 // トークルームから抜ける
 const leaveTalkRoom = async (req, res) => {
@@ -58,6 +60,11 @@ const leaveTalkRoom = async (req, res) => {
         (friend) => friend.friend_id
       );
       await Friend.deleteOne({ user_id, friend_id });
+      await Notification.create({
+        receiver_id: friend_id,
+        actor_id: user_id,
+        action_type: NOTIFICATION_TYPE.LEAVE_FRIEND,
+      });
       return res
         .status(200)
         .json({ message: '友達から抜けるのに成功しました。' });
@@ -114,6 +121,19 @@ const createMessage = async (req, res) => {
     await talkRoom.updateOne({
       $set: { last_message, last_message_date: saveDate },
     });
+
+    await Promise.all(
+      talkRoomMemberIds.map(async (talkRoomMemberId) => {
+        if (talkRoomMemberId !== sender_id) {
+          await Notification.create({
+            receiver_id: talkRoomMemberId,
+            actor_id: sender_id,
+            action_type: NOTIFICATION_TYPE.RECEIVE_TALK,
+            content_id: talk_room_id,
+          });
+        }
+      })
+    );
 
     return res.status(200).json({ message: '' });
   } catch (err) {
@@ -196,6 +216,12 @@ const reactionMessage = async (req, res) => {
     // 実行処理
     await ReactionMessage.create({ talk_id, reactor_id, reaction_type });
 
+    await Notification.create({
+      receiver_id: talk.sender_id,
+      actor_id: reactor_id,
+      action_type: NOTIFICATION_TYPE.REACTION_TALK,
+      content_id: talk.talk_room_id,
+    });
     return res.status(200).json({ message: 'トークにリアクションしました' });
   } catch (err) {
     return res.status(500).json(err);

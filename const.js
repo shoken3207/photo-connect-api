@@ -1,3 +1,15 @@
 const NO_IMAGE_PATH = '/images/noImage.jpg';
+const NOTIFICATION_TYPE = {
+  ADD_FRIEND: 1,
+  LEAVE_FRIEND: 2,
+  PARTICIPATION_PLAN: 3,
+  LEAVE_PLAN: 4,
+  EXCEPT_PLAN: 5,
+  REMOVE_PLAN: 6,
+  LIKE_PLAN: 7,
+  RECEIVE_TALK: 8,
+  REACTION_TALK: 9,
+  ACCEPT_PLAN: 10,
+};
 
-module.exports = { NO_IMAGE_PATH };
+module.exports = { NO_IMAGE_PATH, NOTIFICATION_TYPE };

@@ -6,7 +6,7 @@ const ReactionMessageSchema = new mongoose.Schema(
     reactor_id: { type: String, require },
     reaction_type: { type: String, require },
   },
-  { timestamp: true }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('ReactionMessage', ReactionMessageSchema);

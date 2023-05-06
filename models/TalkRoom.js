@@ -26,7 +26,7 @@ const TalkRoomSchema = new mongoose.Schema(
       type: Boolean,
     },
   },
-  { timestamp: true }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('TalkRoom', TalkRoomSchema);
