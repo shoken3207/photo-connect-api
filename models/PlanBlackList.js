@@ -5,7 +5,7 @@ const PlanBlackListSchema = new mongoose.Schema(
     plan_id: { type: String, require },
     user_id: { type: String, require },
   },
-  { timestamp: true }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('PlanBlackList', PlanBlackListSchema);

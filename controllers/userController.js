@@ -8,6 +8,9 @@ const {
   userCreateResponse,
   usersCreateResponse,
 } = require('../utils/createResponses');
+const Notification = require('../models/Notification');
+const { NOTIFICATION_TYPE } = require('../const');
+const { convertToSaveDate } = require('../utils/dateUtils');
 
 // ユーザー情報登録
 const register = async (req, res) => {
@@ -63,9 +66,12 @@ const addFriend = async (req, res) => {
       return res.status(404).json({ message: '既に、友達追加済みです。' });
 
     // 実行処理
+    const nowDate = new Date();
+    const saveDate = convertToSaveDate(nowDate);
     const newTalkRoom = await TalkRoom.create({
       is_group_talk_room: false,
       is_plan_talk_room: false,
+      last_message_date: saveDate,
     });
     await Friend.create({
       talk_room_id: newTalkRoom._id,
@@ -84,6 +90,11 @@ const addFriend = async (req, res) => {
     await TalkRoomMember.create({
       talk_room_id: newTalkRoom._id,
       member_id: user_id,
+    });
+    await Notification.create({
+      receiver_id: friend_id,
+      actor_id: user_id,
+      action_type: NOTIFICATION_TYPE.ADD_FRIEND,
     });
 
     return res.status(200).json({ message: '友達追加に成功しました。' });

@@ -12,15 +12,13 @@ const TalkRoom = require('../models/TalkRoom');
 const TalkRoomMember = require('../models/TalkRoomMember');
 const User = require('../models/User');
 const { plansCreateResponse } = require('../utils/createResponses');
-const {
-  convertToSaveDate,
-  convertToDefaultDeadLine,
-} = require('../utils/dateUtils');
-const { NO_IMAGE_PATH } = require('../const');
+const { convertToSaveDate } = require('../utils/dateUtils');
+const { NO_IMAGE_PATH, NOTIFICATION_TYPE } = require('../const');
 const {
   isClosedPlanByDefaultDeadLine,
   isClosedPlanByDeadLine,
 } = require('../utils/planUtils');
+const Notification = require('../models/Notification');
 
 // プランデータの作成
 const createPlan = async (req, res) => {
@@ -37,11 +35,14 @@ const createPlan = async (req, res) => {
     tags,
   } = req.body;
   try {
+    const nowDate = new Date();
+    const saveDate = convertToSaveDate(nowDate);
     const talkRoom = await TalkRoom.create({
       talk_room_name: title,
       talk_room_icon_image: images[0] || NO_IMAGE_PATH,
       is_group_talk_room: true,
       is_plan_talk_room: true,
+      last_message_date: saveDate,
     });
     await TalkRoomMember.create({
       talk_room_id: talkRoom._id,
@@ -140,7 +141,7 @@ const deletePlan = async (req, res) => {
   const { plan_id, user_id } = req.params;
   try {
     const plan = await Plan.findById(plan_id);
-    console.log('bbbb', plan);
+    const participants = await ParticipationPlan.find({ plan_id });
     if (plan.organizer_id !== user_id)
       return res.status(400).json({
         message: '作成者が自分以外のプランデータを削除することはできません。',
@@ -164,6 +165,15 @@ const deletePlan = async (req, res) => {
     await Talk.deleteMany({ talk_room_id: plan.talk_room_id });
     await TalkRoom.findByIdAndDelete(plan.talk_room_id);
     await plan.deleteOne();
+    await Promise.all(
+      participants.map(async (participant) => {
+        await Notification.create({
+          receiver_id: participant.participants_id,
+          actor_id: user_id,
+          action_type: NOTIFICATION_TYPE.REMOVE_PLAN,
+        });
+      })
+    );
     return res.status(200).json({ message: 'planの削除に成功しました' });
   } catch (err) {
     return res.status(500).json(err);
@@ -278,6 +288,24 @@ const participationPlan = async (req, res) => {
       member_id: user_id,
     });
 
+    await Notification.create({
+      receiver_id: plan.organizer_id,
+      actor_id: user_id,
+      content_id: plan_id,
+      action_type: NOTIFICATION_TYPE.PARTICIPATION_PLAN,
+      is_plan_organizer: true,
+    });
+    await Promise.all(
+      participants.map(async (participant) => {
+        await Notification.create({
+          receiver_id: participant.participants_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.PARTICIPATION_PLAN,
+        });
+      })
+    );
+
     return res.status(200).json({ message: 'プランの参加に成功しました。' });
   } catch (err) {
     return res.status(500).json(err);
@@ -305,6 +333,25 @@ const leavePlan = async (req, res) => {
       member_id: user_id,
     });
     await talkRoom.deleteOne();
+
+    const participants = await ParticipationPlan.find({ plan_id });
+    await Notification.create({
+      receiver_id: plan.organizer_id,
+      actor_id: user_id,
+      content_id: plan_id,
+      action_type: NOTIFICATION_TYPE.LEAVE_PLAN,
+      is_plan_organizer: true,
+    });
+    await Promise.all(
+      participants.map(async (participant) => {
+        await Notification.create({
+          receiver_id: participant.participants_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.LEAVE_PLAN,
+        });
+      })
+    );
     return res.status(200).json({ message: 'プランから抜けました。' });
   } catch (err) {
     return res.status(500).json(err);
@@ -337,6 +384,24 @@ const exceptPlan = async (req, res) => {
     });
     await talkRoom.deleteOne();
     await PlanBlackList.create({ plan_id, user_id });
+
+    const participants = await ParticipationPlan.find({ plan_id });
+    await Notification.create({
+      receiver_id: user_id,
+      actor_id: organizer_id,
+      content_id: plan_id,
+      action_type: NOTIFICATION_TYPE.EXCEPT_PLAN,
+    });
+    await Promise.all(
+      participants.map(async (participant) => {
+        await Notification.create({
+          receiver_id: participant.participants_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.LEAVE_PLAN,
+        });
+      })
+    );
     return res
       .status(200)
       .json({ message: 'プランから抜けさせるのに成功しました。' });
@@ -347,8 +412,14 @@ const exceptPlan = async (req, res) => {
 
 // プランのブラックリストから外す
 const acceptPlan = async (req, res) => {
-  const { plan_id, user_id } = req.body;
+  const { plan_id, user_id, organizer_id } = req.body;
   try {
+    const plan = await Plan.findById(plan_id);
+    if (plan.organizer_id !== organizer_id)
+      return res.status(404).json({
+        message: 'この操作は、プランの作成者にしか許可されていません。',
+      });
+
     const planBlackList = await PlanBlackList.findOne({ plan_id, user_id });
     if (!planBlackList)
       return res
@@ -356,6 +427,12 @@ const acceptPlan = async (req, res) => {
         .json({ message: 'プランから追放されていません。' });
 
     await planBlackList.deleteOne();
+    await Notification.create({
+      receiver_id: user_id,
+      actor_id: organizer_id,
+      content_id: plan_id,
+      action_type: NOTIFICATION_TYPE.ACCEPT_PLAN,
+    });
     return res
       .status(200)
       .json({ message: 'プランのブラックリストから外しました。' });
@@ -377,6 +454,12 @@ const likePlan = async (req, res) => {
       return res.status(200).json({ message: 'プランのいいねを外しました。' });
     } else {
       LikePlan.create({ plan_id, liker_id });
+      await Notification.create({
+        receiver_id: plan.organizer_id,
+        actor_id: liker_id,
+        content_id: plan_id,
+        action_type: NOTIFICATION_TYPE.LIKE_PLAN,
+      });
       return res
         .status(200)
         .json({ message: 'プランのいいねに成功しました。' });
