@@ -161,6 +161,7 @@ const notificationsCreateResponse = async (notifications) => {
         action_type,
         is_plan_organizer,
         createdAt,
+        readed,
       }) => {
         const actor = await User.findById(actor_id);
         let content_image;
@@ -193,6 +194,7 @@ const notificationsCreateResponse = async (notifications) => {
           action_type,
           is_plan_organizer,
           createdAt,
+          readed,
         };
       }
     )
