@@ -20,6 +20,7 @@ const {
   resumePlan,
   acceptPlan,
   invitationPlan,
+  cancelInvitationPlan,
 } = require('../controllers/planController');
 
 router.post('/create', createPlan);
@@ -32,6 +33,7 @@ router.post('/except', exceptPlan);
 router.post('/accept', acceptPlan);
 router.post('/like', likePlan);
 router.post('/invitation', invitationPlan);
+router.post('/cancelInvitation', cancelInvitationPlan);
 router.delete('/delete/:plan_id/:user_id', deletePlan);
 router.get('/:plan_id/id', fetchPlan);
 router.get('/prefecture/:prefecture/:start/:limit', fetchPlansByPrefecture);

@@ -245,6 +245,53 @@ const invitationPlan = async (req, res) => {
   }
 };
 
+// プランへの招待取り消し
+const cancelInvitationPlan = async (req, res) => {
+  const { invitee_ids, user_id, plan_id } = req.body;
+  try {
+    // チェック処理
+    const plan = await Plan.findById(plan_id);
+    if (plan.organizer_id !== user_id)
+      return res
+        .status(404)
+        .json({ message: 'あなたは、プランの作成者ではありません。' });
+
+    const errorMessages = await Promise.all(
+      invitee_ids.map(async (invitee_id) => {
+        const invitation = await InvitationPlan.findOne({
+          plan_id,
+          invitee_id,
+        });
+        console.log('invitation: ', invitation);
+        if (!invitation) {
+          const invitee = await User.findById(invitee_id);
+          return `${invitee.username}は、プランへ招待されていません。`;
+        }
+      })
+    ).then((messages) => messages.filter((message) => message !== undefined));
+    if (errorMessages.length > 0)
+      return res.status(404).json({ message: errorMessages[0] });
+
+    // 実行処理
+    await Promise.all(
+      invitee_ids.map(async (invitee_id) => {
+        await InvitationPlan.findOneAndDelete({ plan_id, invitee_id });
+        await Notification.findOneAndDelete({
+          receiver_id: invitee_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.INVITATION_PLAN,
+        });
+      })
+    );
+    return res
+      .status(200)
+      .json({ message: 'プランへの招待をキャンセルしました。' });
+  } catch (err) {
+    return res.status(500).json(err);
+  }
+};
+
 // プランデータ更新
 const updatePlan = async (req, res) => {
   const {
@@ -775,6 +822,7 @@ module.exports = {
   updatePlan,
   deletePlan,
   invitationPlan,
+  cancelInvitationPlan,
   likePlan,
   fetchPlan,
   fetchPlansByPrefecture,
