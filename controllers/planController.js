@@ -19,6 +19,7 @@ const {
   isClosedPlanByDeadLine,
 } = require('../utils/planUtils');
 const Notification = require('../models/Notification');
+const InvitationPlan = require('../models/InvitationPlan');
 
 // プランデータの作成
 const createPlan = async (req, res) => {
@@ -175,6 +176,70 @@ const deletePlan = async (req, res) => {
       })
     );
     return res.status(200).json({ message: 'planの削除に成功しました' });
+  } catch (err) {
+    return res.status(500).json(err);
+  }
+};
+
+const invitationPlan = async (req, res) => {
+  const { invitee_ids, user_id, plan_id } = req.body;
+  try {
+    // チェック処理
+    const plan = await Plan.findById(plan_id);
+    if (plan.organizer_id !== user_id)
+      return res
+        .status(404)
+        .json({ message: 'あなたは、プランの作成者ではありません。' });
+
+    const errorMessages = await Promise.all(
+      invitee_ids.map(async (invitee_id) => {
+        const friend1 = await Friend.findOne({
+          user_id,
+          friend_id: invitee_id,
+        });
+        const friend2 = await Friend.findOne({
+          user_id: invitee_id,
+          friend_id: user_id,
+        });
+        const friend = await User.findById(invitee_id);
+        if (!friend1 || !friend2) {
+          return `${friend.username}は、友達から抜けています。`;
+        }
+        const participant = await ParticipationPlan.findOne({
+          plan_id,
+          participants_id: invitee_id,
+        });
+        if (participant) {
+          return `${friend.username}は、プランに参加済みです。`;
+        }
+
+        const invitation = await InvitationPlan.findOne({
+          plan_id,
+          invitee_id,
+        });
+        if (invitation) {
+          return `${friend.username}は、プランへ招待済みです。`;
+        }
+      })
+    ).then((messages) => messages.filter((message) => message !== undefined));
+    if (errorMessages.length > 0)
+      return res.status(404).json({ message: errorMessages[0] });
+
+    // 実行処理
+    await Promise.all(
+      invitee_ids.map(async (invitee_id) => {
+        await InvitationPlan.create({ plan_id, invitee_id });
+        await Notification.create({
+          receiver_id: invitee_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.INVITATION_PLAN,
+        });
+      })
+    );
+    return res
+      .status(200)
+      .json({ message: 'プランへの招待を友達に通知しました。' });
   } catch (err) {
     return res.status(500).json(err);
   }
@@ -709,6 +774,7 @@ module.exports = {
   acceptPlan,
   updatePlan,
   deletePlan,
+  invitationPlan,
   likePlan,
   fetchPlan,
   fetchPlansByPrefecture,

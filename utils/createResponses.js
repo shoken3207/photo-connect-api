@@ -1,5 +1,6 @@
 const { NOTIFICATION_TYPE, NO_IMAGE_PATH } = require('../const');
 const Friend = require('../models/Friend');
+const InvitationPlan = require('../models/InvitationPlan');
 const LikePlan = require('../models/LikePlan');
 const ParticipationPlan = require('../models/ParticipationPlan');
 const PlanBlackList = require('../models/PlanBlackList');
@@ -55,6 +56,12 @@ const plansCreateResponse = async (plans) => {
       const blackUsers = await User.find({ _id: { $in: blakUserIds } }).then(
         (blackUsers) => usersCreateResponse(blackUsers)
       );
+      const inviteeIds = await InvitationPlan.find({ plan_id: plan._id }).then(
+        (invitees) => invitees.map((invitee) => invitee.invitee_id)
+      );
+      const invitees = await User.find({ _id: { $in: inviteeIds } }).then(
+        (invitees) => usersCreateResponse(invitees)
+      );
       const participantIds = await ParticipationPlan.find({
         plan_id: plan._id,
       }).then((participationPlans) =>
@@ -70,6 +77,7 @@ const plansCreateResponse = async (plans) => {
         likers,
         participants,
         blackUsers,
+        invitees,
       };
     })
   );
@@ -171,6 +179,7 @@ const notificationsCreateResponse = async (notifications) => {
           case NOTIFICATION_TYPE.EXCEPT_PLAN:
           case NOTIFICATION_TYPE.ACCEPT_PLAN:
           case NOTIFICATION_TYPE.LIKE_PLAN:
+          case NOTIFICATION_TYPE.INVITATION_PLAN:
             const images = await PlanImage.find({ plan_id: content_id });
             content_image = images.length > 0 ? images[0].image : NO_IMAGE_PATH;
             break;

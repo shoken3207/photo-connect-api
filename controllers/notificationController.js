@@ -1,21 +1,5 @@
 const Notification = require('../models/Notification');
-const User = require('../models/User');
 const { notificationsCreateResponse } = require('../utils/createResponses');
-
-const readNotifications = async (req, res) => {
-  const { user_id } = req.body;
-
-  try {
-    await Notification.updateMany(
-      { receiver_id: user_id, readed: false },
-      { $set: { readed: true } }
-    );
-
-    return res.status(200).json({ message: '' });
-  } catch (err) {
-    return res.status(500).json(err);
-  }
-};
 
 const fetchNotifications = async (req, res) => {
   const start = parseInt(req.params.start);
