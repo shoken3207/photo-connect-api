@@ -10,10 +10,6 @@ const isClosedPlanByDefaultDeadLine = (saveDate) => {
   const nowDate = new Date();
   const defaultDeadLine = convertToDefaultDeadLine(saveDate);
   const formatDate = convertToSaveDate(nowDate);
-  console.log('saveData: ', saveDate);
-  console.log('defaultDeadLine: ', defaultDeadLine);
-  console.log('formatDate: ', formatDate);
-  console.log('defaultDeadLine < formatDate: ', defaultDeadLine < formatDate);
   return defaultDeadLine < formatDate;
 };
 

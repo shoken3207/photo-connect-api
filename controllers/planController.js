@@ -769,12 +769,10 @@ const fetchHomePlans = async (req, res) => {
     const filterPlans = await Promise.all(
       plans.map(async (plan) => {
         if (plan.dead_line && isClosedPlanByDeadLine(plan.dead_line)) {
-          console.log('aa: ', plan.title);
           return;
         }
 
         if (!plan.dead_line && isClosedPlanByDefaultDeadLine(plan.date)) {
-          console.log('bb: ', plan.title);
           return;
         }
 
@@ -786,7 +784,6 @@ const fetchHomePlans = async (req, res) => {
             return;
           }
         }
-        console.log('cc: ', plan.title);
         return plan;
       })
     ).then((results) => results.filter((result) => result !== undefined));
