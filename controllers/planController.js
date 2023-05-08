@@ -802,9 +802,11 @@ const fetchHomePlans = async (req, res) => {
     } else if (filterPlans.length > 0) {
       const limitPlans = filterPlans.splice(start, limit);
       const response = await plansCreateResponse(limitPlans);
-      return res
-        .status(200)
-        .json({ plans: response, planCount: filterPlans.length, message: '' });
+      return res.status(200).json({
+        plans: response,
+        planCount: filterPlans.length + limitPlans.length,
+        message: '',
+      });
     }
   } catch (err) {
     return res.status(500).json(err);
