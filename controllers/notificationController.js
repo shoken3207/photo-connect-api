@@ -11,6 +11,7 @@ const fetchNotifications = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(start)
       .limit(limit);
+    console.log('notifications: ', notifications[0]);
     if (notifications.length === 0)
       return res
         .status(404)
