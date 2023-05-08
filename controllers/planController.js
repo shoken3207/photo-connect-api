@@ -94,7 +94,6 @@ const closePlan = async (req, res) => {
     const nowDate = new Date();
     const saveDate = convertToSaveDate(nowDate);
     await plan.updateOne({ dead_line: saveDate });
-    console.log('called');
     return res.status(200).json({ message: '参加者の募集を締め切りました。' });
   } catch (err) {
     return res.status(500).json(err);
@@ -123,7 +122,6 @@ const resumePlan = async (req, res) => {
         message: 'プランの参加人数が上限に達しています。',
       });
     }
-    console.log(!isClosedPlanByDefaultDeadLine(plan.date));
     if (plan.dead_line !== '' && isClosedPlanByDefaultDeadLine(plan.date))
       return res
         .status(404)
@@ -262,7 +260,6 @@ const cancelInvitationPlan = async (req, res) => {
           plan_id,
           invitee_id,
         });
-        console.log('invitation: ', invitation);
         if (!invitation) {
           const invitee = await User.findById(invitee_id);
           return `${invitee.username}は、プランへ招待されていません。`;
@@ -649,11 +646,9 @@ const fetchPlansByTag = async (req, res) => {
 
 // いいねしたプラン
 const fetchLikedPlans = async (req, res) => {
-  console.log('req: ', req.body);
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { liker_id } = req.params;
-  console.log(start, limit, liker_id);
   try {
     const likedPlanIds = await LikePlan.find({
       liker_id,
@@ -726,7 +721,6 @@ const fetchCreatedPlans = async (req, res) => {
       .sort({ date: -1 })
       .skip(start)
       .limit(limit);
-    console.log('plans: ', plans);
     if (plans.length === 0)
       return res
         .status(404)
@@ -790,7 +784,6 @@ const fetchHomePlans = async (req, res) => {
             return;
           }
         }
-
         return plan;
       })
     ).then((results) => results.filter((result) => result !== undefined));
