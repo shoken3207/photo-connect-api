@@ -155,6 +155,15 @@ const deleteMessage = async (req, res) => {
         .json({ message: 'トークの作成者以外は、削除できません。' });
 
     await Talk.findByIdAndDelete(talk_id);
+    const [lastTalk] = await Talk.find({ talk_room_id: talk.talk_room_id })
+      .sort({ createdAt: -1 })
+      .limit(1);
+    await TalkRoom.findByIdAndUpdate(talk.talk_room_id, {
+      $set: {
+        last_message: lastTalk.message || '画像が送信されています。',
+        last_message_date: lastTalk.createdAt,
+      },
+    });
     return res.status(200).json({ message: '' });
   } catch (err) {
     return res.status(500).json(err);
