@@ -158,12 +158,20 @@ const deleteMessage = async (req, res) => {
     const [lastTalk] = await Talk.find({ talk_room_id: talk.talk_room_id })
       .sort({ createdAt: -1 })
       .limit(1);
-    await TalkRoom.findByIdAndUpdate(talk.talk_room_id, {
-      $set: {
-        last_message: lastTalk.message || '画像が送信されています。',
-        last_message_date: lastTalk.createdAt,
-      },
-    });
+    if (lastTalk) {
+      await TalkRoom.findByIdAndUpdate(talk.talk_room_id, {
+        $set: {
+          last_message: lastTalk.message || '画像が送信されています。',
+          last_message_date: lastTalk.createdAt,
+        },
+      });
+    } else {
+      await TalkRoom.findByIdAndUpdate(talk.talk_room_id, {
+        $set: {
+          last_message: '',
+        },
+      });
+    }
     return res.status(200).json({ message: '' });
   } catch (err) {
     return res.status(500).json(err);
