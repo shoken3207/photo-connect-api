@@ -35,6 +35,8 @@ const createPlan = async (req, res) => {
     images,
     tags,
   } = req.body;
+  if (!organizer_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const nowDate = new Date();
     const saveDate = convertToSaveDate(nowDate);
@@ -80,6 +82,8 @@ const createPlan = async (req, res) => {
 // プランデータの締め切り
 const closePlan = async (req, res) => {
   const { plan_id, user_id } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
 
   try {
     const plan = await Plan.findById(plan_id);
@@ -103,6 +107,8 @@ const closePlan = async (req, res) => {
 // プラン募集再開
 const resumePlan = async (req, res) => {
   const { plan_id, user_id } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
 
   try {
     const plan = await Plan.findById(plan_id);
@@ -138,6 +144,8 @@ const resumePlan = async (req, res) => {
 // プランデータの削除
 const deletePlan = async (req, res) => {
   const { plan_id, user_id } = req.params;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     const participants = await ParticipationPlan.find({ plan_id });
@@ -181,6 +189,8 @@ const deletePlan = async (req, res) => {
 
 const invitationPlan = async (req, res) => {
   const { invitee_ids, user_id, plan_id } = req.body;
+  if (!plan_id || !user_id || invitee_ids.length === 0)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const plan = await Plan.findById(plan_id);
@@ -246,6 +256,8 @@ const invitationPlan = async (req, res) => {
 // プランへの招待取り消し
 const cancelInvitationPlan = async (req, res) => {
   const { invitee_ids, user_id, plan_id } = req.body;
+  if (!plan_id || !user_id || invitee_ids.length === 0)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const plan = await Plan.findById(plan_id);
@@ -303,6 +315,8 @@ const updatePlan = async (req, res) => {
     images,
     tags,
   } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (plan.organizer_id !== user_id)
@@ -352,6 +366,8 @@ const updatePlan = async (req, res) => {
 // プランに参加
 const participationPlan = async (req, res) => {
   const { user_id, plan_id } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (!plan)
@@ -424,6 +440,8 @@ const participationPlan = async (req, res) => {
 // プランから抜ける
 const leavePlan = async (req, res) => {
   const { plan_id, user_id } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (!plan)
@@ -470,6 +488,8 @@ const leavePlan = async (req, res) => {
 // プランから抜けさせる
 const exceptPlan = async (req, res) => {
   const { plan_id, user_id, organizer_id } = req.body;
+  if (!plan_id || !user_id || !organizer_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const participant = await ParticipationPlan.findOne({
       plan_id,
@@ -522,6 +542,8 @@ const exceptPlan = async (req, res) => {
 // プランのブラックリストから外す
 const acceptPlan = async (req, res) => {
   const { plan_id, user_id, organizer_id } = req.body;
+  if (!plan_id || !user_id || !organizer_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (plan.organizer_id !== organizer_id)
@@ -553,6 +575,8 @@ const acceptPlan = async (req, res) => {
 // プランにいいねをする
 const likePlan = async (req, res) => {
   const { plan_id, liker_id } = req.body;
+  if (!plan_id || !liker_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (!plan)
@@ -649,6 +673,8 @@ const fetchLikedPlans = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { liker_id } = req.params;
+  if (!liker_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const likedPlanIds = await LikePlan.find({
       liker_id,
@@ -681,6 +707,8 @@ const fetchParticipatedPlans = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { participants_id } = req.params;
+  if (!participants_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const participatedPlanIds = await ParticipationPlan.find({
       participants_id,
@@ -714,6 +742,8 @@ const fetchCreatedPlans = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { user_id } = req.params;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plans = await Plan.find({
       organizer_id: user_id,
@@ -743,6 +773,8 @@ const fetchHomePlans = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { user_id } = req.params;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   let plans;
   try {
     const user = await User.findById(user_id);

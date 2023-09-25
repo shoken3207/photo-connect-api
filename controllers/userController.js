@@ -24,6 +24,8 @@ const register = async (req, res) => {
     icon_image,
     home_image,
   } = req.body;
+  if (!email)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const user = await User.findOne({ email });
@@ -56,6 +58,8 @@ const register = async (req, res) => {
 // 友達追加
 const addFriend = async (req, res) => {
   const { user_id, friend_id } = req.body;
+  if (!user_id || !friend_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const friend = await Friend.findOne({
@@ -114,6 +118,8 @@ const updateUser = async (req, res) => {
     prefecture,
     birthday,
   } = req.body;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const user = await User.findById(user_id);
@@ -146,6 +152,8 @@ const updateUser = async (req, res) => {
 // ユーザデータを削除
 const deleteUser = async (req, res) => {
   const { user_id, login_user_id } = req.body;
+  if (!user_id || !login_user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   if (login_user_id !== user_id)
     return res
       .status(404)
@@ -216,6 +224,8 @@ const fetchUserByEmail = async (req, res) => {
 // user_idからユーザ情報を取得
 const fetchUserById = async (req, res) => {
   const user_id = req.params.user_id;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const user = await User.findById(user_id);
     if (!user)

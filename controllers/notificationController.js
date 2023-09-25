@@ -5,6 +5,8 @@ const fetchNotifications = async (req, res) => {
   const start = parseInt(req.params.start);
   const limit = parseInt(req.params.limit);
   const { user_id } = req.params;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
 
   try {
     const notifications = await Notification.find({ receiver_id: user_id })
@@ -25,7 +27,7 @@ const fetchNotifications = async (req, res) => {
       })
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       notifications: response,
       message: '',
     });
@@ -36,12 +38,14 @@ const fetchNotifications = async (req, res) => {
 
 const fetchNotificationCount = async (req, res) => {
   const { user_id } = req.params;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   const allNotifications = await Notification.find({
     receiver_id: user_id,
     readed: false,
   });
 
-  res.status(200).json({
+  return res.status(200).json({
     notificationCount: allNotifications.length,
   });
 };
