@@ -6,7 +6,7 @@ const FriendSchema = new mongoose.Schema(
     user_id: { type: String, require },
     friend_id: { type: String, require },
   },
-  { timestamp: true }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('Friend', FriendSchema);

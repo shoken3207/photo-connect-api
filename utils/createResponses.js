@@ -1,4 +1,6 @@
+const { NOTIFICATION_TYPE, NO_IMAGE_PATH } = require('../const');
 const Friend = require('../models/Friend');
+const InvitationPlan = require('../models/InvitationPlan');
 const LikePlan = require('../models/LikePlan');
 const ParticipationPlan = require('../models/ParticipationPlan');
 const PlanBlackList = require('../models/PlanBlackList');
@@ -7,6 +9,7 @@ const PlanTag = require('../models/PlanTag');
 const ReactionMessage = require('../models/ReactionMessage');
 const ReadMessage = require('../models/ReadMessage');
 const Talk = require('../models/Talk');
+const TalkRoom = require('../models/TalkRoom');
 const TalkRoomMember = require('../models/TalkRoomMember');
 const User = require('../models/User');
 
@@ -53,6 +56,12 @@ const plansCreateResponse = async (plans) => {
       const blackUsers = await User.find({ _id: { $in: blakUserIds } }).then(
         (blackUsers) => usersCreateResponse(blackUsers)
       );
+      const inviteeIds = await InvitationPlan.find({ plan_id: plan._id }).then(
+        (invitees) => invitees.map((invitee) => invitee.invitee_id)
+      );
+      const invitees = await User.find({ _id: { $in: inviteeIds } }).then(
+        (invitees) => usersCreateResponse(invitees)
+      );
       const participantIds = await ParticipationPlan.find({
         plan_id: plan._id,
       }).then((participationPlans) =>
@@ -68,6 +77,7 @@ const plansCreateResponse = async (plans) => {
         likers,
         participants,
         blackUsers,
+        invitees,
       };
     })
   );
@@ -149,10 +159,63 @@ const talkRoomCreateResponse = async (talkRooms, user_id) => {
   return convertTalkRooms;
 };
 
+const notificationsCreateResponse = async (notifications) => {
+  const convertNotifications = await Promise.all(
+    notifications.map(
+      async ({
+        _id,
+        actor_id,
+        content_id,
+        action_type,
+        is_plan_organizer,
+        createdAt,
+        readed,
+      }) => {
+        const actor = await User.findById(actor_id);
+        let content_image;
+        switch (action_type) {
+          case NOTIFICATION_TYPE.PARTICIPATION_PLAN:
+          case NOTIFICATION_TYPE.LEAVE_PLAN:
+          case NOTIFICATION_TYPE.EXCEPT_PLAN:
+          case NOTIFICATION_TYPE.ACCEPT_PLAN:
+          case NOTIFICATION_TYPE.LIKE_PLAN:
+          case NOTIFICATION_TYPE.INVITATION_PLAN:
+            const images = await PlanImage.find({ plan_id: content_id });
+            content_image = images.length > 0 ? images[0].image : NO_IMAGE_PATH;
+            break;
+          case NOTIFICATION_TYPE.REACTION_TALK:
+          case NOTIFICATION_TYPE.RECEIVE_TALK:
+            const talkRoom = await TalkRoom.findById(content_id);
+            if (talkRoom.is_group_talk_room) {
+              content_image = talkRoom.talk_room_icon_image;
+            }
+            break;
+          default:
+            break;
+        }
+        return {
+          _id,
+          actor_image: actor.icon_image,
+          actor_id,
+          actor_name: actor.username,
+          content_id,
+          content_image,
+          action_type,
+          is_plan_organizer,
+          createdAt,
+          readed,
+        };
+      }
+    )
+  );
+  return convertNotifications;
+};
+
 module.exports = {
   userCreateResponse,
   usersCreateResponse,
   plansCreateResponse,
   talkRoomCreateResponse,
   messageCreateResopnse,
+  notificationsCreateResponse,
 };

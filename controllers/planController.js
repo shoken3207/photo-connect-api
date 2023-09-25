@@ -12,15 +12,14 @@ const TalkRoom = require('../models/TalkRoom');
 const TalkRoomMember = require('../models/TalkRoomMember');
 const User = require('../models/User');
 const { plansCreateResponse } = require('../utils/createResponses');
-const {
-  convertToSaveDate,
-  convertToDefaultDeadLine,
-} = require('../utils/dateUtils');
-const { NO_IMAGE_PATH } = require('../const');
+const { convertToSaveDate } = require('../utils/dateUtils');
+const { NO_IMAGE_PATH, NOTIFICATION_TYPE } = require('../const');
 const {
   isClosedPlanByDefaultDeadLine,
   isClosedPlanByDeadLine,
 } = require('../utils/planUtils');
+const Notification = require('../models/Notification');
+const InvitationPlan = require('../models/InvitationPlan');
 
 // プランデータの作成
 const createPlan = async (req, res) => {
@@ -36,12 +35,17 @@ const createPlan = async (req, res) => {
     images,
     tags,
   } = req.body;
+  if (!organizer_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
+    const nowDate = new Date();
+    const saveDate = convertToSaveDate(nowDate);
     const talkRoom = await TalkRoom.create({
       talk_room_name: title,
       talk_room_icon_image: images[0] || NO_IMAGE_PATH,
       is_group_talk_room: true,
       is_plan_talk_room: true,
+      last_message_date: saveDate,
     });
     await TalkRoomMember.create({
       talk_room_id: talkRoom._id,
@@ -78,6 +82,8 @@ const createPlan = async (req, res) => {
 // プランデータの締め切り
 const closePlan = async (req, res) => {
   const { plan_id, user_id } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
 
   try {
     const plan = await Plan.findById(plan_id);
@@ -92,7 +98,6 @@ const closePlan = async (req, res) => {
     const nowDate = new Date();
     const saveDate = convertToSaveDate(nowDate);
     await plan.updateOne({ dead_line: saveDate });
-    console.log('called');
     return res.status(200).json({ message: '参加者の募集を締め切りました。' });
   } catch (err) {
     return res.status(500).json(err);
@@ -102,6 +107,8 @@ const closePlan = async (req, res) => {
 // プラン募集再開
 const resumePlan = async (req, res) => {
   const { plan_id, user_id } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
 
   try {
     const plan = await Plan.findById(plan_id);
@@ -121,7 +128,6 @@ const resumePlan = async (req, res) => {
         message: 'プランの参加人数が上限に達しています。',
       });
     }
-    console.log(!isClosedPlanByDefaultDeadLine(plan.date));
     if (plan.dead_line !== '' && isClosedPlanByDefaultDeadLine(plan.date))
       return res
         .status(404)
@@ -138,9 +144,11 @@ const resumePlan = async (req, res) => {
 // プランデータの削除
 const deletePlan = async (req, res) => {
   const { plan_id, user_id } = req.params;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
-    console.log('bbbb', plan);
+    const participants = await ParticipationPlan.find({ plan_id });
     if (plan.organizer_id !== user_id)
       return res.status(400).json({
         message: '作成者が自分以外のプランデータを削除することはできません。',
@@ -164,7 +172,130 @@ const deletePlan = async (req, res) => {
     await Talk.deleteMany({ talk_room_id: plan.talk_room_id });
     await TalkRoom.findByIdAndDelete(plan.talk_room_id);
     await plan.deleteOne();
+    await Promise.all(
+      participants.map(async (participant) => {
+        await Notification.create({
+          receiver_id: participant.participants_id,
+          actor_id: user_id,
+          action_type: NOTIFICATION_TYPE.REMOVE_PLAN,
+        });
+      })
+    );
     return res.status(200).json({ message: 'planの削除に成功しました' });
+  } catch (err) {
+    return res.status(500).json(err);
+  }
+};
+
+const invitationPlan = async (req, res) => {
+  const { invitee_ids, user_id, plan_id } = req.body;
+  if (!plan_id || !user_id || invitee_ids.length === 0)
+    return res.status(404).json({ message: '不正なパラメータです。' });
+  try {
+    // チェック処理
+    const plan = await Plan.findById(plan_id);
+    if (plan.organizer_id !== user_id)
+      return res
+        .status(404)
+        .json({ message: 'あなたは、プランの作成者ではありません。' });
+
+    const errorMessages = await Promise.all(
+      invitee_ids.map(async (invitee_id) => {
+        const friend1 = await Friend.findOne({
+          user_id,
+          friend_id: invitee_id,
+        });
+        const friend2 = await Friend.findOne({
+          user_id: invitee_id,
+          friend_id: user_id,
+        });
+        const friend = await User.findById(invitee_id);
+        if (!friend1 || !friend2) {
+          return `${friend.username}は、友達から抜けています。`;
+        }
+        const participant = await ParticipationPlan.findOne({
+          plan_id,
+          participants_id: invitee_id,
+        });
+        if (participant) {
+          return `${friend.username}は、プランに参加済みです。`;
+        }
+
+        const invitation = await InvitationPlan.findOne({
+          plan_id,
+          invitee_id,
+        });
+        if (invitation) {
+          return `${friend.username}は、プランへ招待済みです。`;
+        }
+      })
+    ).then((messages) => messages.filter((message) => message !== undefined));
+    if (errorMessages.length > 0)
+      return res.status(404).json({ message: errorMessages[0] });
+
+    // 実行処理
+    await Promise.all(
+      invitee_ids.map(async (invitee_id) => {
+        await InvitationPlan.create({ plan_id, invitee_id });
+        await Notification.create({
+          receiver_id: invitee_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.INVITATION_PLAN,
+        });
+      })
+    );
+    return res
+      .status(200)
+      .json({ message: 'プランへの招待を友達に通知しました。' });
+  } catch (err) {
+    return res.status(500).json(err);
+  }
+};
+
+// プランへの招待取り消し
+const cancelInvitationPlan = async (req, res) => {
+  const { invitee_ids, user_id, plan_id } = req.body;
+  if (!plan_id || !user_id || invitee_ids.length === 0)
+    return res.status(404).json({ message: '不正なパラメータです。' });
+  try {
+    // チェック処理
+    const plan = await Plan.findById(plan_id);
+    if (plan.organizer_id !== user_id)
+      return res
+        .status(404)
+        .json({ message: 'あなたは、プランの作成者ではありません。' });
+
+    const errorMessages = await Promise.all(
+      invitee_ids.map(async (invitee_id) => {
+        const invitation = await InvitationPlan.findOne({
+          plan_id,
+          invitee_id,
+        });
+        if (!invitation) {
+          const invitee = await User.findById(invitee_id);
+          return `${invitee.username}は、プランへ招待されていません。`;
+        }
+      })
+    ).then((messages) => messages.filter((message) => message !== undefined));
+    if (errorMessages.length > 0)
+      return res.status(404).json({ message: errorMessages[0] });
+
+    // 実行処理
+    await Promise.all(
+      invitee_ids.map(async (invitee_id) => {
+        await InvitationPlan.findOneAndDelete({ plan_id, invitee_id });
+        await Notification.findOneAndDelete({
+          receiver_id: invitee_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.INVITATION_PLAN,
+        });
+      })
+    );
+    return res
+      .status(200)
+      .json({ message: 'プランへの招待をキャンセルしました。' });
   } catch (err) {
     return res.status(500).json(err);
   }
@@ -184,6 +315,8 @@ const updatePlan = async (req, res) => {
     images,
     tags,
   } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (plan.organizer_id !== user_id)
@@ -233,6 +366,8 @@ const updatePlan = async (req, res) => {
 // プランに参加
 const participationPlan = async (req, res) => {
   const { user_id, plan_id } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (!plan)
@@ -278,6 +413,24 @@ const participationPlan = async (req, res) => {
       member_id: user_id,
     });
 
+    await Notification.create({
+      receiver_id: plan.organizer_id,
+      actor_id: user_id,
+      content_id: plan_id,
+      action_type: NOTIFICATION_TYPE.PARTICIPATION_PLAN,
+      is_plan_organizer: true,
+    });
+    await Promise.all(
+      participants.map(async (participant) => {
+        await Notification.create({
+          receiver_id: participant.participants_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.PARTICIPATION_PLAN,
+        });
+      })
+    );
+
     return res.status(200).json({ message: 'プランの参加に成功しました。' });
   } catch (err) {
     return res.status(500).json(err);
@@ -287,6 +440,8 @@ const participationPlan = async (req, res) => {
 // プランから抜ける
 const leavePlan = async (req, res) => {
   const { plan_id, user_id } = req.body;
+  if (!plan_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (!plan)
@@ -305,6 +460,25 @@ const leavePlan = async (req, res) => {
       member_id: user_id,
     });
     await talkRoom.deleteOne();
+
+    const participants = await ParticipationPlan.find({ plan_id });
+    await Notification.create({
+      receiver_id: plan.organizer_id,
+      actor_id: user_id,
+      content_id: plan_id,
+      action_type: NOTIFICATION_TYPE.LEAVE_PLAN,
+      is_plan_organizer: true,
+    });
+    await Promise.all(
+      participants.map(async (participant) => {
+        await Notification.create({
+          receiver_id: participant.participants_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.LEAVE_PLAN,
+        });
+      })
+    );
     return res.status(200).json({ message: 'プランから抜けました。' });
   } catch (err) {
     return res.status(500).json(err);
@@ -314,6 +488,8 @@ const leavePlan = async (req, res) => {
 // プランから抜けさせる
 const exceptPlan = async (req, res) => {
   const { plan_id, user_id, organizer_id } = req.body;
+  if (!plan_id || !user_id || !organizer_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const participant = await ParticipationPlan.findOne({
       plan_id,
@@ -337,6 +513,24 @@ const exceptPlan = async (req, res) => {
     });
     await talkRoom.deleteOne();
     await PlanBlackList.create({ plan_id, user_id });
+
+    const participants = await ParticipationPlan.find({ plan_id });
+    await Notification.create({
+      receiver_id: user_id,
+      actor_id: organizer_id,
+      content_id: plan_id,
+      action_type: NOTIFICATION_TYPE.EXCEPT_PLAN,
+    });
+    await Promise.all(
+      participants.map(async (participant) => {
+        await Notification.create({
+          receiver_id: participant.participants_id,
+          actor_id: user_id,
+          content_id: plan_id,
+          action_type: NOTIFICATION_TYPE.LEAVE_PLAN,
+        });
+      })
+    );
     return res
       .status(200)
       .json({ message: 'プランから抜けさせるのに成功しました。' });
@@ -347,8 +541,16 @@ const exceptPlan = async (req, res) => {
 
 // プランのブラックリストから外す
 const acceptPlan = async (req, res) => {
-  const { plan_id, user_id } = req.body;
+  const { plan_id, user_id, organizer_id } = req.body;
+  if (!plan_id || !user_id || !organizer_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
+    const plan = await Plan.findById(plan_id);
+    if (plan.organizer_id !== organizer_id)
+      return res.status(404).json({
+        message: 'この操作は、プランの作成者にしか許可されていません。',
+      });
+
     const planBlackList = await PlanBlackList.findOne({ plan_id, user_id });
     if (!planBlackList)
       return res
@@ -356,6 +558,12 @@ const acceptPlan = async (req, res) => {
         .json({ message: 'プランから追放されていません。' });
 
     await planBlackList.deleteOne();
+    await Notification.create({
+      receiver_id: user_id,
+      actor_id: organizer_id,
+      content_id: plan_id,
+      action_type: NOTIFICATION_TYPE.ACCEPT_PLAN,
+    });
     return res
       .status(200)
       .json({ message: 'プランのブラックリストから外しました。' });
@@ -367,6 +575,8 @@ const acceptPlan = async (req, res) => {
 // プランにいいねをする
 const likePlan = async (req, res) => {
   const { plan_id, liker_id } = req.body;
+  if (!plan_id || !liker_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plan = await Plan.findById(plan_id);
     if (!plan)
@@ -377,6 +587,12 @@ const likePlan = async (req, res) => {
       return res.status(200).json({ message: 'プランのいいねを外しました。' });
     } else {
       LikePlan.create({ plan_id, liker_id });
+      await Notification.create({
+        receiver_id: plan.organizer_id,
+        actor_id: liker_id,
+        content_id: plan_id,
+        action_type: NOTIFICATION_TYPE.LIKE_PLAN,
+      });
       return res
         .status(200)
         .json({ message: 'プランのいいねに成功しました。' });
@@ -454,11 +670,11 @@ const fetchPlansByTag = async (req, res) => {
 
 // いいねしたプラン
 const fetchLikedPlans = async (req, res) => {
-  console.log('req: ', req.body);
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { liker_id } = req.params;
-  console.log(start, limit, liker_id);
+  if (!liker_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const likedPlanIds = await LikePlan.find({
       liker_id,
@@ -491,6 +707,8 @@ const fetchParticipatedPlans = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { participants_id } = req.params;
+  if (!participants_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const participatedPlanIds = await ParticipationPlan.find({
       participants_id,
@@ -524,6 +742,8 @@ const fetchCreatedPlans = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { user_id } = req.params;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const plans = await Plan.find({
       organizer_id: user_id,
@@ -531,7 +751,6 @@ const fetchCreatedPlans = async (req, res) => {
       .sort({ date: -1 })
       .skip(start)
       .limit(limit);
-    console.log('plans: ', plans);
     if (plans.length === 0)
       return res
         .status(404)
@@ -554,6 +773,8 @@ const fetchHomePlans = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { user_id } = req.params;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   let plans;
   try {
     const user = await User.findById(user_id);
@@ -595,7 +816,6 @@ const fetchHomePlans = async (req, res) => {
             return;
           }
         }
-
         return plan;
       })
     ).then((results) => results.filter((result) => result !== undefined));
@@ -607,9 +827,11 @@ const fetchHomePlans = async (req, res) => {
     } else if (filterPlans.length > 0) {
       const limitPlans = filterPlans.splice(start, limit);
       const response = await plansCreateResponse(limitPlans);
-      return res
-        .status(200)
-        .json({ plans: response, planCount: filterPlans.length, message: '' });
+      return res.status(200).json({
+        plans: response,
+        planCount: filterPlans.length + limitPlans.length,
+        message: '',
+      });
     }
   } catch (err) {
     return res.status(500).json(err);
@@ -626,6 +848,8 @@ module.exports = {
   acceptPlan,
   updatePlan,
   deletePlan,
+  invitationPlan,
+  cancelInvitationPlan,
   likePlan,
   fetchPlan,
   fetchPlansByPrefecture,

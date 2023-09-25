@@ -12,7 +12,7 @@ const UserSchema = new mongoose.Schema(
     home_image: { type: String },
     is_admin: { type: Boolean, default: false },
   },
-  { timestamp: true }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('User', UserSchema);

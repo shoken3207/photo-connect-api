@@ -12,9 +12,9 @@ const CLIENT_URL = process.env.CLIENT_URL;
 app.use(cors({ origin: CLIENT_URL, credentials: true }));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', CLIENT_URL);
-});
+// app.use((req, res, next) => {
+//   res.setHeader('Access-Control-Allow-Origin', CLIENT_URL);
+// });
 app.use('/api', indexRouter);
 app.use(express.json());
 const server = http.createServer(app);

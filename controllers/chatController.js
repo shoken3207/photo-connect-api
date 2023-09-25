@@ -11,10 +11,14 @@ const {
 } = require('../utils/createResponses');
 const { convertToSaveDate } = require('../utils/dateUtils');
 const Friend = require('../models/Friend');
+const Notification = require('../models/Notification');
+const { NOTIFICATION_TYPE } = require('../const');
 
 // トークルームから抜ける
 const leaveTalkRoom = async (req, res) => {
   const { talk_room_id, user_id } = req.body;
+  if (!talk_room_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const talkRoom = await TalkRoom.findById(talk_room_id);
 
@@ -58,6 +62,11 @@ const leaveTalkRoom = async (req, res) => {
         (friend) => friend.friend_id
       );
       await Friend.deleteOne({ user_id, friend_id });
+      await Notification.create({
+        receiver_id: friend_id,
+        actor_id: user_id,
+        action_type: NOTIFICATION_TYPE.LEAVE_FRIEND,
+      });
       return res
         .status(200)
         .json({ message: '友達から抜けるのに成功しました。' });
@@ -75,6 +84,8 @@ const leaveTalkRoom = async (req, res) => {
 const createMessage = async (req, res) => {
   const { message, image, talk_room_id, sender_id, sender_icon_image } =
     req.body;
+  if (!talk_room_id || !sender_id || (!message && !image))
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const talkRoom = await TalkRoom.findById(talk_room_id);
@@ -115,6 +126,19 @@ const createMessage = async (req, res) => {
       $set: { last_message, last_message_date: saveDate },
     });
 
+    await Promise.all(
+      talkRoomMemberIds.map(async (talkRoomMemberId) => {
+        if (talkRoomMemberId !== sender_id) {
+          await Notification.create({
+            receiver_id: talkRoomMemberId,
+            actor_id: sender_id,
+            action_type: NOTIFICATION_TYPE.RECEIVE_TALK,
+            content_id: talk_room_id,
+          });
+        }
+      })
+    );
+
     return res.status(200).json({ message: '' });
   } catch (err) {
     return res.status(500).json(err);
@@ -124,6 +148,8 @@ const createMessage = async (req, res) => {
 // メッセージ削除
 const deleteMessage = async (req, res) => {
   const { talk_id, user_id } = req.params;
+  if (!talk_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const talk = await Talk.findById(talk_id);
     if (!talk)
@@ -135,6 +161,23 @@ const deleteMessage = async (req, res) => {
         .json({ message: 'トークの作成者以外は、削除できません。' });
 
     await Talk.findByIdAndDelete(talk_id);
+    const [lastTalk] = await Talk.find({ talk_room_id: talk.talk_room_id })
+      .sort({ createdAt: -1 })
+      .limit(1);
+    if (lastTalk) {
+      await TalkRoom.findByIdAndUpdate(talk.talk_room_id, {
+        $set: {
+          last_message: lastTalk.message || '画像が送信されています。',
+          last_message_date: lastTalk.createdAt,
+        },
+      });
+    } else {
+      await TalkRoom.findByIdAndUpdate(talk.talk_room_id, {
+        $set: {
+          last_message: '',
+        },
+      });
+    }
     return res.status(200).json({ message: '' });
   } catch (err) {
     return res.status(500).json(err);
@@ -144,6 +187,8 @@ const deleteMessage = async (req, res) => {
 // メッセージ既読
 const readMessage = async (req, res) => {
   const { talk_room_id, reader_id } = req.body;
+  if (!talk_room_id || !reader_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const talkIds = await Talk.find({
@@ -181,6 +226,8 @@ const readMessage = async (req, res) => {
 // メッセージリアクション
 const reactionMessage = async (req, res) => {
   const { talk_id, reactor_id, reaction_type } = req.body;
+  if (!talk_id || !reactor_id || !reaction_type)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const talk = await Talk.findById(talk_id);
@@ -196,6 +243,12 @@ const reactionMessage = async (req, res) => {
     // 実行処理
     await ReactionMessage.create({ talk_id, reactor_id, reaction_type });
 
+    await Notification.create({
+      receiver_id: talk.sender_id,
+      actor_id: reactor_id,
+      action_type: NOTIFICATION_TYPE.REACTION_TALK,
+      content_id: talk.talk_room_id,
+    });
     return res.status(200).json({ message: 'トークにリアクションしました' });
   } catch (err) {
     return res.status(500).json(err);
@@ -205,6 +258,8 @@ const reactionMessage = async (req, res) => {
 // メッセージリアクションを外す
 const removeMessageReaction = async (req, res) => {
   const { talk_id, reactor_id } = req.body;
+  if (!talk_id || !reactor_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     // チェック処理
     const talk = await Talk.findById(talk_id);
@@ -246,6 +301,8 @@ const fetchMessage = async (req, res) => {
 // トークルームを取得
 const fetchTalkRoom = async (req, res) => {
   const { talk_room_id, user_id } = req.params;
+  if (!talk_room_id || !user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const talkRoom = await TalkRoom.findById(talk_room_id);
     if (!talkRoom)
@@ -266,6 +323,8 @@ const fetchTalkRooms = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { user_id } = req.params;
+  if (!user_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const talkRoomIds = await TalkRoomMember.find({
       member_id: user_id,
@@ -291,6 +350,8 @@ const fetchTalkRoomMembers = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { talk_room_id } = req.params;
+  if (!talk_room_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const talkRoomMemberIds = await TalkRoomMember.find({
       talk_room_id,
@@ -322,6 +383,8 @@ const fetchMessages = async (req, res) => {
   const start = parseInt(req.params.start) || 0;
   const limit = parseInt(req.params.limit) || 10;
   const { talk_room_id } = req.params;
+  if (!talk_room_id)
+    return res.status(404).json({ message: '不正なパラメータです。' });
   try {
     const messages = await Talk.find({ talk_room_id })
       .sort({ createdAt: -1 })

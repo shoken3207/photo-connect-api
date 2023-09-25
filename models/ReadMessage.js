@@ -5,7 +5,7 @@ const ReadMessageSchema = new mongoose.Schema(
     talk_id: { type: String, require },
     reader_id: { type: String, require },
   },
-  { timestamp: true }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('ReadMessage', ReadMessageSchema);

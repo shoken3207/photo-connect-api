@@ -13,7 +13,7 @@ const PlanSchema = new mongoose.Schema(
     organizer_id: { type: String, require: true },
     organizer_icon_image: { type: String },
   },
-  { timestamp: true }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('Plan', PlanSchema);
